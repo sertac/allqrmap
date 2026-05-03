@@ -284,10 +284,21 @@ async fn ai_search(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Extract the text from Gemini response and parse it as a JSON array of IDs
+    tracing::debug!("Gemini Response: {:?}", gemini_response);
+
+    // Check for errors in the response body
+    if let Some(error) = gemini_response.get("error") {
+        let msg = error["message"].as_str().unwrap_or("Unknown Gemini Error");
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Gemini API Error: {}", msg)));
+    }
+
+    // Extract the text from Gemini response
     let ai_text = gemini_response["candidates"][0]["content"]["parts"][0]["text"]
         .as_str()
-        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "Failed to get AI response text".into()))?
+        .ok_or_else(|| {
+            let reason = gemini_response["candidates"][0]["finishReason"].as_str().unwrap_or("unknown");
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("AI response blocked or empty. Reason: {}", reason))
+        })?
         .trim();
 
     // Remove markdown code blocks if present

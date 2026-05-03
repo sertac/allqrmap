@@ -63,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/", get(serve_index))
         .route("/api/restaurants", get(get_restaurants).post(create_restaurant))
         .route("/api/ai-search", post(ai_search))
-        .nest_service("/", ServeDir::new("static"))
+        .fallback_service(ServeDir::new("static"))
         .layer(cors)
         .with_state(pool);
 
@@ -94,19 +94,90 @@ async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
         .await?;
 
     if count == 0 {
-        tracing::info!("Seeding database with real Turkish restaurants...");
-        let restaurants = vec![
+        tracing::info!("Seeding database with expanded real Turkish restaurants...");
+        
+        let mut restaurants: Vec<(String, f64, f64, String)> = vec![
+            // Fine Dining & Famous
             ("Nusr-Et Steakhouse Sandal Bedesteni", 41.0125, 28.9682, "https://www.nusr-et.com.tr/menu"),
-            ("Zübeyir Ocakbaşı", 41.0368, 28.9800, "https://zubeyirocakbasi.com.tr/menu"),
-            ("Hafiz Mustafa 1864", 41.0142, 28.9774, "https://www.hafizmustafa.com/menu/"),
-            ("Karaköy Güllüoğlu", 41.0245, 28.9775, "https://www.karakoygulluoglu.com/menu"),
             ("Mikla Restaurant", 41.0345, 28.9814, "https://www.miklarestaurant.com/tr/menu/mikla-menu"),
+            ("Zübeyir Ocakbaşı", 41.0368, 28.9800, "https://zubeyirocakbasi.com.tr/menu"),
+            ("Karaköy Güllüoğlu", 41.0245, 28.9775, "https://www.karakoygulluoglu.com/menu"),
+            ("Hafiz Mustafa 1864 Sultanahmet", 41.0142, 28.9774, "https://www.hafizmustafa.com/menu/"),
+            ("Karaköy Lokantası", 41.0235, 28.9785, "https://www.karakoylokantasi.com/menu"),
+            ("Hacı Abdullah Lokantası", 41.0353, 28.9803, "https://www.haciabdullah.com.tr/menu"),
+            ("1924 Istanbul", 41.0315, 28.9755, "https://www.1924istanbul.com/menu"),
+            
+            // Beşiktaş
+            ("Karadeniz Döner Asım Usta", 41.0425, 29.0072, "https://www.karadenizdonerasimusta.com/menu"),
+            ("Feriye Lokantası", 41.0461, 29.0214, "https://www.feriye.com/menu"),
+            ("Alaf Kuruçeşme", 41.0535, 29.0345, "https://www.alafkurucesme.com/menu"),
+            ("Tuğra Restaurant", 41.0441, 29.0167, "https://www.tugrarestaurant.com.tr/menu"),
+            ("Vogue Restaurant", 41.0415, 29.0012, "https://www.voguerestaurantandbar.com/menu"),
+            
+            // Kadıköy
+            ("Borsam Taşfırın", 40.9892, 29.0261, "https://www.borsamtasfirin.com/menu"),
+            ("Yanyalı Fehmi Lokantası", 40.9915, 29.0275, "https://www.yanyali.com/menu"),
+            ("The Townhouse", 40.9615, 29.0855, "https://thetownhouseistanbul.com/menu"),
+            ("Viktor Levi Şarap Evi", 40.9865, 29.0285, "https://viktorlevisarapevi.com/menu"),
+            
+            // Nişantaşı & Şişli
+            ("Delicatessen Nişantaşı", 41.0485, 28.9935, "https://www.delicatessen.com.tr/menu"),
+            ("Göreme Muhallebicisi", 41.0515, 28.9815, "https://www.gorememuhallebicisi.com/menu"),
+            ("Adana Ocakbaşı Kurtuluş", 41.0525, 28.9845, "https://www.adanaocakbasi.com/menu"),
+            ("Spago Istanbul", 41.0475, 28.9954, "https://www.spago.com.tr/menu"),
+            
+            // Chain: Midpoint
+            ("Midpoint Nişantaşı", 41.0492, 28.9931, "https://www.midpoint.com.tr/menu"),
+            ("Midpoint Bağdat Caddesi", 40.9634, 29.0682, "https://www.midpoint.com.tr/menu"),
+            ("Midpoint Tünel", 41.0281, 28.9754, "https://www.midpoint.com.tr/menu"),
+            ("Midpoint Watergarden", 40.9931, 29.1014, "https://www.midpoint.com.tr/menu"),
+            ("Midpoint Kanyon", 41.0782, 29.0114, "https://www.midpoint.com.tr/menu"),
+            
+            // Chain: BigChefs
+            ("BigChefs Tarabya", 41.1385, 29.0562, "https://www.bigchefs.com.tr/menu"),
+            ("BigChefs Tünel", 41.0283, 28.9751, "https://www.bigchefs.com.tr/menu"),
+            ("BigChefs Metropol", 40.9942, 29.1215, "https://www.bigchefs.com.tr/menu"),
+            ("BigChefs Gayrettepe", 41.0681, 29.0064, "https://www.bigchefs.com.tr/menu"),
+            ("BigChefs Anadolu Hisarı", 41.0825, 29.0664, "https://www.bigchefs.com.tr/menu"),
+            
+            // Chain: Cookshop
+            ("Cookshop Akaretler", 41.0412, 29.0004, "https://cookshop.com.tr/menu"),
+            ("Cookshop Galataport", 41.0265, 28.9842, "https://cookshop.com.tr/menu"),
+            ("Cookshop Caddebostan", 40.9631, 29.0635, "https://cookshop.com.tr/menu"),
+            ("Cookshop Vadistanbul", 41.1072, 28.9874, "https://cookshop.com.tr/menu"),
+            ("Cookshop Emaar Square", 41.0045, 29.0654, "https://cookshop.com.tr/menu"),
+            
+            // Chain: Happy Moon's
+            ("Happy Moon's Kadıköy", 40.9882, 29.0314, "https://happygroup.com.tr/menu/"),
+            ("Happy Moon's Emaar", 41.0045, 29.0662, "https://happygroup.com.tr/menu/"),
+            ("Happy Moon's City's Nişantaşı", 41.0501, 28.9934, "https://happygroup.com.tr/menu/"),
+            ("Happy Moon's Akasya", 41.0012, 29.0541, "https://happygroup.com.tr/menu/"),
+            ("Happy Moon's Maltepe Park", 40.9234, 29.1564, "https://happygroup.com.tr/menu/"),
+            
+            // Local Heroes & Others
             ("Bayramoğlu Döner", 41.0965, 29.0910, "https://www.bayramogludoner.com.tr/menu"),
             ("Çiya Sofrası", 40.9886, 29.0234, "https://ciya.com.tr/menu/"),
-            ("Günaydın Kasap Steakhouse", 41.0165, 29.1305, "https://www.gunaydinet.com/menu"),
-            ("Aspava Yıldız", 39.9075, 32.8620, "https://aspava.com.tr/menu"),
-            ("7 Mehmet", 36.8835, 30.6580, "https://www.7mehmet.com/menu"),
-        ];
+            ("Günaydın Steakhouse İstinye", 41.1085, 29.0212, "https://www.gunaydinet.com/menu"),
+            ("Namlı Gurme Karaköy", 41.0242, 28.9745, "https://www.namligurme.com.tr/menu"),
+            ("Mangerie Bebek", 41.0765, 29.0434, "https://www.mangeriebebek.com/menu"),
+            ("Lucca Bebek", 41.0772, 29.0445, "https://www.luccastyle.com/menu"),
+            
+            // Other Cities
+            ("Aspava Yıldız (Ankara)", 39.9075, 32.8620, "https://aspava.com.tr/menu"),
+            ("7 Mehmet (Antalya)", 36.8835, 30.6580, "https://www.7mehmet.com/menu"),
+            ("Balıkçı Kenan (Antalya)", 36.8845, 30.7012, "https://www.balikcikenan.com/menu"),
+            ("Deniz Restaurant (İzmir)", 38.4354, 27.1384, "https://www.denizrestaurant.com.tr/menu"),
+        ].into_iter().map(|(n, la, ln, m)| (n.to_string(), la, ln, m.to_string())).collect();
+
+        // Check if external restaurants.json exists and import it
+        if let Ok(content) = std::fs::read_to_string("restaurants.json") {
+            if let Ok(external_list) = serde_json::from_str::<Vec<CreateRestaurant>>(&content) {
+                tracing::info!("Importing {} restaurants from restaurants.json", external_list.len());
+                for res in external_list {
+                    restaurants.push((res.name, res.lat, res.lng, res.menu_url));
+                }
+            }
+        }
 
         for (name, lat, lng, menu_url) in restaurants {
             sqlx::query("INSERT INTO restaurants (name, lat, lng, menu_url) VALUES (?, ?, ?, ?)")

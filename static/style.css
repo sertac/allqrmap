@@ -103,14 +103,12 @@ body, html {
     font-size: 14px;
 }
 
-.coords {
-    display: flex;
-    gap: 10px;
-}
-
-.coords input {
-    width: 50%;
-    background-color: #f9f9f9;
+#mini-map {
+    height: 200px;
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    z-index: 2001;
 }
 
 .hint {

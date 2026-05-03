@@ -20,11 +20,10 @@
             <form id="add-form">
                 <input type="text" id="res-name" placeholder="Restaurant Name" required>
                 <input type="url" id="res-menu" placeholder="Menu URL (e.g. https://...)" required>
-                <p class="hint">Click on the map to set location, or use current location.</p>
-                <div class="coords">
-                    <input type="number" id="res-lat" step="any" placeholder="Latitude" required readonly>
-                    <input type="number" id="res-lng" step="any" placeholder="Longitude" required readonly>
-                </div>
+                <p class="hint">Click on the mini-map below to set the location:</p>
+                <div id="mini-map"></div>
+                <input type="hidden" id="res-lat">
+                <input type="hidden" id="res-lng">
                 <button type="submit" id="save-btn">Save Restaurant</button>
             </form>
         </div>

@@ -1,13 +1,12 @@
-// Initialize the map centered on Istanbul
+// Initialize the main map
 const map = L.map('map', {
     zoomControl: false 
-}).setView([41.0082, 28.9784], 11);
+}).setView([41.0082, 28.9784], 11); // Fallback to Istanbul
 
 L.control.zoom({
     position: 'bottomright'
 }).addTo(map);
 
-// Add OpenStreetMap tiles
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap contributors'
@@ -15,7 +14,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 let allMarkers = [];
 let restaurantsData = [];
-let tempMarker = null;
+let miniMap = null;
+let miniMapMarker = null;
 
 // Modal Elements
 const modal = document.getElementById('add-modal');
@@ -25,13 +25,38 @@ const addForm = document.getElementById('add-form');
 const latInput = document.getElementById('res-lat');
 const lngInput = document.getElementById('res-lng');
 
+// 1. Geolocation on startup
+function centerOnUser() {
+    if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition((position) => {
+            const { latitude, longitude } = position.coords;
+            map.setView([latitude, longitude], 14);
+            
+            // Add a "You are here" marker
+            L.circleMarker([latitude, longitude], {
+                radius: 8,
+                fillColor: "#007bff",
+                color: "#fff",
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).addTo(map).bindPopup("You are here").openPopup();
+            
+        }, (err) => {
+            console.warn(`Geolocation error (${err.code}): ${err.message}`);
+        }, {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
+        });
+    }
+}
+
 // Fetch restaurants from the API
 async function fetchRestaurants() {
     try {
         const response = await fetch('/api/restaurants');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         restaurantsData = await response.json();
         renderMarkers(restaurantsData);
     } catch (error) {
@@ -40,19 +65,13 @@ async function fetchRestaurants() {
 }
 
 function renderMarkers(restaurants) {
-    // Clear existing markers
     allMarkers.forEach(m => map.removeLayer(m.marker));
     allMarkers = [];
-
-    restaurants.forEach(restaurant => {
-        addMarkerToMap(restaurant);
-    });
+    restaurants.forEach(addMarkerToMap);
 }
 
 function addMarkerToMap(restaurant) {
     const marker = L.marker([restaurant.lat, restaurant.lng]).addTo(map);
-    
-    // Prepare popup content
     const popupDiv = document.createElement('div');
     popupDiv.className = 'popup-content';
     popupDiv.innerHTML = `
@@ -60,10 +79,8 @@ function addMarkerToMap(restaurant) {
         <div id="qr-${restaurant.id}" class="qr-container"></div>
         <a href="${restaurant.menu_url}" target="_blank" class="menu-link">Open Menu</a>
     `;
-    
     marker.bindPopup(popupDiv);
 
-    // Generate QR code when popup opens
     marker.on('popupopen', () => {
         const qrElement = document.getElementById(`qr-${restaurant.id}`);
         if (qrElement && qrElement.innerHTML === "") {
@@ -78,20 +95,14 @@ function addMarkerToMap(restaurant) {
         }
     });
 
-    allMarkers.push({
-        restaurant,
-        marker
-    });
+    allMarkers.push({ restaurant, marker });
 }
 
-// Search functionality
+// Search
 const searchInput = document.getElementById('search-input');
 searchInput.addEventListener('input', (e) => {
     const term = e.target.value.toLowerCase();
-    const filtered = restaurantsData.filter(r => 
-        r.name.toLowerCase().includes(term)
-    );
-    
+    const filtered = restaurantsData.filter(r => r.name.toLowerCase().includes(term));
     allMarkers.forEach(item => {
         if (item.restaurant.name.toLowerCase().includes(term)) {
             if (!map.hasLayer(item.marker)) item.marker.addTo(map);
@@ -99,51 +110,66 @@ searchInput.addEventListener('input', (e) => {
             if (map.hasLayer(item.marker)) map.removeLayer(item.marker);
         }
     });
-
-    if (filtered.length === 1 && term.length > 2) {
-        map.panTo([filtered[0].lat, filtered[0].lng]);
-    }
+    if (filtered.length === 1 && term.length > 2) map.panTo([filtered[0].lat, filtered[0].lng]);
 });
 
-// Modal Logic
+// Modal & Mini Map Logic
 addBtn.onclick = () => {
     modal.style.display = "block";
-    // Set default coordinates to map center if empty
-    if (!latInput.value) {
-        const center = map.getCenter();
-        latInput.value = center.lat.toFixed(6);
-        lngInput.value = center.lng.toFixed(6);
+    
+    // Initialize or update mini map
+    if (!miniMap) {
+        miniMap = L.map('mini-map', { zoomControl: false }).setView(map.getCenter(), 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
+        
+        miniMap.on('click', (e) => {
+            updateMiniMapMarker(e.latlng);
+        });
+    } else {
+        miniMap.setView(map.getCenter(), 15);
+        miniMap.invalidateSize();
+    }
+    
+    // Reset inputs
+    latInput.value = "";
+    lngInput.value = "";
+    if (miniMapMarker) {
+        miniMap.removeLayer(miniMapMarker);
+        miniMapMarker = null;
+    }
+}
+
+function updateMiniMapMarker(latlng) {
+    latInput.value = latlng.lat.toFixed(6);
+    lngInput.value = latlng.lng.toFixed(6);
+    
+    if (miniMapMarker) {
+        miniMapMarker.setLatLng(latlng);
+    } else {
+        miniMapMarker = L.marker(latlng, { draggable: true }).addTo(miniMap);
+        miniMapMarker.on('dragend', (e) => {
+            const pos = e.target.getLatLng();
+            latInput.value = pos.lat.toFixed(6);
+            lngInput.value = pos.lng.toFixed(6);
+        });
     }
 }
 
 closeBtn.onclick = () => {
     modal.style.display = "none";
-    if (tempMarker) {
-        map.removeLayer(tempMarker);
-        tempMarker = null;
-    }
 }
 
 window.onclick = (event) => {
-    if (event.target == modal) {
-        closeBtn.onclick();
-    }
+    if (event.target == modal) closeBtn.onclick();
 }
 
-// Map click to set location
-map.on('click', (e) => {
-    if (modal.style.display === "block") {
-        latInput.value = e.latlng.lat.toFixed(6);
-        lngInput.value = e.latlng.lng.toFixed(6);
-        
-        if (tempMarker) map.removeLayer(tempMarker);
-        tempMarker = L.marker(e.latlng, { opacity: 0.6 }).addTo(map);
-    }
-});
-
-// Form Submission
 addForm.onsubmit = async (e) => {
     e.preventDefault();
+    if (!latInput.value || !lngInput.value) {
+        alert("Please select a location on the mini-map!");
+        return;
+    }
+
     const name = document.getElementById('res-name').value;
     const menu_url = document.getElementById('res-menu').value;
     const lat = parseFloat(latInput.value);
@@ -173,4 +199,6 @@ addForm.onsubmit = async (e) => {
     }
 }
 
+// Initial calls
+centerOnUser();
 fetchRestaurants();

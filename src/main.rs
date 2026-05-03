@@ -1,6 +1,7 @@
 use axum::{
     extract::State,
     http::StatusCode,
+    response::Html,
     routing::{get, post},
     Json, Router,
 };
@@ -59,6 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Application router
     let app = Router::new()
+        .route("/", get(serve_index))
         .route("/api/restaurants", get(get_restaurants).post(create_restaurant))
         .route("/api/ai-search", post(ai_search))
         .nest_service("/", ServeDir::new("static"))
@@ -224,4 +226,14 @@ async fn ai_search(
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, format!("AI returned invalid JSON: {}", cleaned_text)))?;
 
     Ok(Json(matching_ids))
+}
+
+async fn serve_index() -> Result<Html<String>, (StatusCode, String)> {
+    let mut html = std::fs::read_to_string("static/index.html")
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let ga_id = std::env::var("GA_MEASUREMENT_ID").unwrap_or_default();
+    html = html.replace("G-XXXXXXXXXX", &ga_id);
+
+    Ok(Html(html))
 }

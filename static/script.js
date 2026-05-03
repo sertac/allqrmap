@@ -26,6 +26,7 @@ const addForm = document.getElementById('add-form');
 const latInput = document.getElementById('res-lat');
 const lngInput = document.getElementById('res-lng');
 const searchInput = document.getElementById('search-input');
+const suggestionsList = document.getElementById('search-suggestions');
 
 // 1. Geolocation on startup
 function centerOnUser() {
@@ -96,8 +97,6 @@ function addMarkerToMap(restaurant) {
 
     allMarkers.push({ restaurant, marker });
 }
-const searchInput = document.getElementById('search-input');
-const suggestionsList = document.getElementById('search-suggestions');
 
 // Show/Hide suggestions
 searchInput.addEventListener('focus', () => {
@@ -107,7 +106,7 @@ searchInput.addEventListener('focus', () => {
 // Hide suggestions when clicking outside
 document.addEventListener('click', (e) => {
     const container = document.getElementById('search-container');
-    if (!container.contains(e.target)) {
+    if (container && !container.contains(e.target)) {
         suggestionsList.style.display = 'none';
     }
 });
@@ -126,12 +125,12 @@ document.querySelectorAll('.suggestion-item').forEach(item => {
 // Basic Search
 searchInput.addEventListener('input', (e) => {
     const term = e.target.value.toLowerCase();
+    
     if (term.length > 0) {
         suggestionsList.style.display = 'none'; // Hide suggestions while typing
     } else {
         suggestionsList.style.display = 'block'; // Show if empty again
     }
-...
 
     if (term.length === 0) {
         allMarkers.forEach(item => { if (!map.hasLayer(item.marker)) item.marker.addTo(map); });

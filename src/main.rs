@@ -1,7 +1,7 @@
 use axum::{
     extract::State,
     http::StatusCode,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -28,8 +28,14 @@ struct CreateRestaurant {
     menu_url: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct AiSearchRequest {
+    query: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenvy::dotenv().ok();
     // Initialize logging
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
@@ -54,6 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Application router
     let app = Router::new()
         .route("/api/restaurants", get(get_restaurants).post(create_restaurant))
+        .route("/api/ai-search", post(ai_search))
         .nest_service("/", ServeDir::new("static"))
         .layer(cors)
         .with_state(pool);
@@ -150,4 +157,71 @@ async fn create_restaurant(
     };
 
     Ok(Json(restaurant))
+}
+
+async fn ai_search(
+    State(pool): State<SqlitePool>,
+    Json(payload): Json<AiSearchRequest>,
+) -> Result<Json<Vec<i64>>, (StatusCode, String)> {
+    let api_key = std::env::var("GEMINI_API_KEY")
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "GEMINI_API_KEY not set".into()))?;
+
+    // Fetch all restaurants to provide context to AI
+    let restaurants = sqlx::query_as::<_, Restaurant>("SELECT * FROM restaurants")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let restaurants_context = restaurants
+        .iter()
+        .map(|r| format!("ID: {}, Name: {}, Menu: {}", r.id, r.name, r.menu_url))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let prompt = format!(
+        "You are a helpful assistant for a restaurant map app. 
+        Based on the following list of restaurants:\n{}\n
+        Which ones best match the user's query: '{}'? 
+        Return ONLY a raw JSON array of the matching IDs (e.g., [1, 2, 5]). 
+        If no matches, return []. Do not include any other text or markdown formatting.",
+        restaurants_context, payload.query
+    );
+
+    let client = reqwest::Client::new();
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={}",
+        api_key
+    );
+
+    let response = client
+        .post(url)
+        .json(&serde_json::json!({
+            "contents": [{
+                "parts": [{
+                    "text": prompt
+                }]
+            }]
+        }))
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let gemini_response: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Extract the text from Gemini response and parse it as a JSON array of IDs
+    let ai_text = gemini_response["candidates"][0]["content"]["parts"][0]["text"]
+        .as_str()
+        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "Failed to get AI response text".into()))?
+        .trim();
+
+    // Remove markdown code blocks if present
+    let cleaned_text = ai_text.replace("```json", "").replace("```", "").trim().to_string();
+
+    let matching_ids: Vec<i64> = serde_json::from_str(&cleaned_text)
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, format!("AI returned invalid JSON: {}", cleaned_text)))?;
+
+    Ok(Json(matching_ids))
 }

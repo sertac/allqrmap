@@ -17,13 +17,15 @@ let restaurantsData = [];
 let miniMap = null;
 let miniMapMarker = null;
 
-// Modal Elements
+// Modal & UI Elements
 const modal = document.getElementById('add-modal');
 const addBtn = document.getElementById('add-btn');
+const aiBtn = document.getElementById('ai-btn');
 const closeBtn = document.querySelector('.close');
 const addForm = document.getElementById('add-form');
 const latInput = document.getElementById('res-lat');
 const lngInput = document.getElementById('res-lng');
+const searchInput = document.getElementById('search-input');
 
 // 1. Geolocation on startup
 function centerOnUser() {
@@ -31,8 +33,6 @@ function centerOnUser() {
         navigator.geolocation.getCurrentPosition((position) => {
             const { latitude, longitude } = position.coords;
             map.setView([latitude, longitude], 14);
-            
-            // Add a "You are here" marker
             L.circleMarker([latitude, longitude], {
                 radius: 8,
                 fillColor: "#007bff",
@@ -41,7 +41,6 @@ function centerOnUser() {
                 opacity: 1,
                 fillOpacity: 0.8
             }).addTo(map).bindPopup("You are here").openPopup();
-            
         }, (err) => {
             console.warn(`Geolocation error (${err.code}): ${err.message}`);
         }, {
@@ -97,12 +96,48 @@ function addMarkerToMap(restaurant) {
 
     allMarkers.push({ restaurant, marker });
 }
-
-// Search
 const searchInput = document.getElementById('search-input');
+const suggestionsList = document.getElementById('search-suggestions');
+
+// Show/Hide suggestions
+searchInput.addEventListener('focus', () => {
+    suggestionsList.style.display = 'block';
+});
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', (e) => {
+    const container = document.getElementById('search-container');
+    if (!container.contains(e.target)) {
+        suggestionsList.style.display = 'none';
+    }
+});
+
+// Handle suggestion clicks
+document.querySelectorAll('.suggestion-item').forEach(item => {
+    item.addEventListener('click', () => {
+        // Remove emoji and trim for the search
+        const text = item.textContent.replace(/[\u{1F300}-\u{1F9FF}]/u, '').trim();
+        searchInput.value = text;
+        suggestionsList.style.display = 'none';
+        aiBtn.onclick(); // Trigger AI search
+    });
+});
+
+// Basic Search
 searchInput.addEventListener('input', (e) => {
     const term = e.target.value.toLowerCase();
-    const filtered = restaurantsData.filter(r => r.name.toLowerCase().includes(term));
+    if (term.length > 0) {
+        suggestionsList.style.display = 'none'; // Hide suggestions while typing
+    } else {
+        suggestionsList.style.display = 'block'; // Show if empty again
+    }
+...
+
+    if (term.length === 0) {
+        allMarkers.forEach(item => { if (!map.hasLayer(item.marker)) item.marker.addTo(map); });
+        return;
+    }
+    
     allMarkers.forEach(item => {
         if (item.restaurant.name.toLowerCase().includes(term)) {
             if (!map.hasLayer(item.marker)) item.marker.addTo(map);
@@ -110,39 +145,80 @@ searchInput.addEventListener('input', (e) => {
             if (map.hasLayer(item.marker)) map.removeLayer(item.marker);
         }
     });
-    if (filtered.length === 1 && term.length > 2) map.panTo([filtered[0].lat, filtered[0].lng]);
 });
+
+// AI Search
+aiBtn.onclick = async () => {
+    const query = searchInput.value;
+    if (query.length < 3) {
+        alert("Please enter a longer query for AI search!");
+        return;
+    }
+
+    aiBtn.classList.add('loading');
+    try {
+        const response = await fetch('/api/ai-search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query })
+        });
+
+        if (response.ok) {
+            const matchingIds = await response.json();
+            
+            // Filter markers based on AI response
+            allMarkers.forEach(item => {
+                if (matchingIds.includes(item.restaurant.id)) {
+                    if (!map.hasLayer(item.marker)) item.marker.addTo(map);
+                } else {
+                    if (map.hasLayer(item.marker)) map.removeLayer(item.marker);
+                }
+            });
+
+            if (matchingIds.length > 0) {
+                // Zoom to fit matching markers
+                const group = L.featureGroup(allMarkers.filter(m => matchingIds.includes(m.restaurant.id)).map(m => m.marker));
+                map.fitBounds(group.getBounds().pad(0.5));
+            } else {
+                alert("AI couldn't find any matching restaurants.");
+            }
+        } else {
+            const error = await response.text();
+            alert("AI Search error: " + error);
+        }
+    } catch (err) {
+        console.error(err);
+        alert("AI Search network error.");
+    } finally {
+        aiBtn.classList.remove('loading');
+    }
+}
+
+// Support 'Enter' key for AI search if text is long
+searchInput.onkeypress = (e) => {
+    if (e.key === 'Enter' && searchInput.value.split(' ').length > 2) {
+        aiBtn.onclick();
+    }
+}
 
 // Modal & Mini Map Logic
 addBtn.onclick = () => {
     modal.style.display = "block";
-    
-    // Initialize or update mini map
     if (!miniMap) {
         miniMap = L.map('mini-map', { zoomControl: false }).setView(map.getCenter(), 15);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
-        
-        miniMap.on('click', (e) => {
-            updateMiniMapMarker(e.latlng);
-        });
+        miniMap.on('click', (e) => updateMiniMapMarker(e.latlng));
     } else {
         miniMap.setView(map.getCenter(), 15);
         miniMap.invalidateSize();
     }
-    
-    // Reset inputs
-    latInput.value = "";
-    lngInput.value = "";
-    if (miniMapMarker) {
-        miniMap.removeLayer(miniMapMarker);
-        miniMapMarker = null;
-    }
+    latInput.value = ""; lngInput.value = "";
+    if (miniMapMarker) { miniMap.removeLayer(miniMapMarker); miniMapMarker = null; }
 }
 
 function updateMiniMapMarker(latlng) {
     latInput.value = latlng.lat.toFixed(6);
     lngInput.value = latlng.lng.toFixed(6);
-    
     if (miniMapMarker) {
         miniMapMarker.setLatLng(latlng);
     } else {
@@ -155,21 +231,12 @@ function updateMiniMapMarker(latlng) {
     }
 }
 
-closeBtn.onclick = () => {
-    modal.style.display = "none";
-}
-
-window.onclick = (event) => {
-    if (event.target == modal) closeBtn.onclick();
-}
+closeBtn.onclick = () => modal.style.display = "none";
+window.onclick = (event) => { if (event.target == modal) closeBtn.onclick(); }
 
 addForm.onsubmit = async (e) => {
     e.preventDefault();
-    if (!latInput.value || !lngInput.value) {
-        alert("Please select a location on the mini-map!");
-        return;
-    }
-
+    if (!latInput.value || !lngInput.value) { alert("Please select a location on the mini-map!"); return; }
     const name = document.getElementById('res-name').value;
     const menu_url = document.getElementById('res-menu').value;
     const lat = parseFloat(latInput.value);
@@ -181,7 +248,6 @@ addForm.onsubmit = async (e) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, menu_url, lat, lng })
         });
-
         if (response.ok) {
             const newRes = await response.json();
             restaurantsData.push(newRes);
@@ -190,15 +256,9 @@ addForm.onsubmit = async (e) => {
             addForm.reset();
             closeBtn.onclick();
             alert("Restaurant added successfully!");
-        } else {
-            alert("Error adding restaurant.");
-        }
-    } catch (err) {
-        console.error(err);
-        alert("Network error.");
-    }
+        } else { alert("Error adding restaurant."); }
+    } catch (err) { console.error(err); alert("Network error."); }
 }
 
-// Initial calls
 centerOnUser();
 fetchRestaurants();

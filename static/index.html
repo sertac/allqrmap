@@ -9,8 +9,19 @@
 </head>
 <body>
     <div id="search-container">
-        <input type="text" id="search-input" placeholder="Search restaurants...">
-        <button id="add-btn" title="Add Restaurant">+</button>
+        <div class="search-bar">
+            <input type="text" id="search-input" placeholder="Search or ask AI...">
+            <button id="ai-btn" title="AI Search">✨</button>
+            <button id="add-btn" title="Add Restaurant">+</button>
+        </div>
+        <div id="search-suggestions" class="suggestions-list">
+            <p class="suggestions-title">Try asking AI:</p>
+            <div class="suggestion-item">🌊 Sahil kenarında bir yerler</div>
+            <div class="suggestion-item">🥩 En iyi steakhouse mekanları</div>
+            <div class="suggestion-item">🥐 Kahvaltı yapacak sakin bir kafe</div>
+            <div class="suggestion-item">🥙 Beşiktaş'ta hızlı dönerciler</div>
+            <div class="suggestion-item">🍲 Ev yemeği yapan yerler</div>
+        </div>
     </div>
 
     <div id="add-modal" class="modal">

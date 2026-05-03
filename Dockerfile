@@ -10,7 +10,8 @@ RUN apt-get update && apt-get install -y pkg-config libsqlite3-dev && rm -rf /va
 COPY . .
 
 # Build the application
-# Using --locked ensures we use the version 4 lockfile correctly
+# Use CARGO_BUILD_JOBS=1 to prevent memory exhaustion on Render Free Tier
+ENV CARGO_BUILD_JOBS=1
 RUN cargo build --release --locked
 
 # Stage 2: Create the runtime image

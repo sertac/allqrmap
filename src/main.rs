@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     // Database setup
-    let db_url = "sqlite:restaurants.db";
+    let db_url = "sqlite:restaurants.db?mode=rwc";
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
         .connect(db_url)

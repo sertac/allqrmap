@@ -10,7 +10,26 @@
 <body>
     <div id="search-container">
         <input type="text" id="search-input" placeholder="Search restaurants...">
+        <button id="add-btn" title="Add Restaurant">+</button>
     </div>
+
+    <div id="add-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Add New Restaurant</h2>
+            <form id="add-form">
+                <input type="text" id="res-name" placeholder="Restaurant Name" required>
+                <input type="url" id="res-menu" placeholder="Menu URL (e.g. https://...)" required>
+                <p class="hint">Click on the map to set location, or use current location.</p>
+                <div class="coords">
+                    <input type="number" id="res-lat" step="any" placeholder="Latitude" required readonly>
+                    <input type="number" id="res-lng" step="any" placeholder="Longitude" required readonly>
+                </div>
+                <button type="submit" id="save-btn">Save Restaurant</button>
+            </form>
+        </div>
+    </div>
+
     <div id="map"></div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>

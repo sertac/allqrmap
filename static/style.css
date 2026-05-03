@@ -16,17 +16,122 @@ body, html {
     left: 50%;
     transform: translateX(-50%);
     z-index: 1000;
-    width: 300px;
+    width: 350px;
+    display: flex;
+    gap: 10px;
 }
 
 #search-input {
-    width: 100%;
+    flex-grow: 1;
     padding: 12px 20px;
     border-radius: 25px;
     border: 1px solid #ccc;
     box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     font-size: 16px;
     outline: none;
+}
+
+#add-btn {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: none;
+    background-color: #28a745;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+#add-btn:hover {
+    background-color: #218838;
+    transform: scale(1.05);
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: white;
+    margin: 10% auto;
+    padding: 25px;
+    border-radius: 15px;
+    width: 90%;
+    max-width: 400px;
+    position: relative;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+}
+
+.close {
+    position: absolute;
+    right: 20px;
+    top: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #aaa;
+}
+
+.close:hover {
+    color: #333;
+}
+
+#add-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+#add-form input {
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+}
+
+.coords {
+    display: flex;
+    gap: 10px;
+}
+
+.coords input {
+    width: 50%;
+    background-color: #f9f9f9;
+}
+
+.hint {
+    font-size: 12px;
+    color: #666;
+    margin: 0;
+}
+
+#save-btn {
+    padding: 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+#save-btn:hover {
+    background-color: #0069d9;
 }
 
 .popup-content {

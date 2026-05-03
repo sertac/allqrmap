@@ -20,6 +20,14 @@ struct Restaurant {
     menu_url: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct CreateRestaurant {
+    name: String,
+    lat: f64,
+    lng: f64,
+    menu_url: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
@@ -45,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Application router
     let app = Router::new()
-        .route("/api/restaurants", get(get_restaurants))
+        .route("/api/restaurants", get(get_restaurants).post(create_restaurant))
         .nest_service("/", ServeDir::new("static"))
         .layer(cors)
         .with_state(pool);
@@ -114,4 +122,32 @@ async fn get_restaurants(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(restaurants))
+}
+
+async fn create_restaurant(
+    State(pool): State<SqlitePool>,
+    Json(payload): Json<CreateRestaurant>,
+) -> Result<Json<Restaurant>, (StatusCode, String)> {
+    let result = sqlx::query(
+        "INSERT INTO restaurants (name, lat, lng, menu_url) VALUES (?, ?, ?, ?)"
+    )
+    .bind(&payload.name)
+    .bind(payload.lat)
+    .bind(payload.lng)
+    .bind(&payload.menu_url)
+    .execute(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let id = result.last_insert_rowid();
+
+    let restaurant = Restaurant {
+        id,
+        name: payload.name,
+        lat: payload.lat,
+        lng: payload.lng,
+        menu_url: payload.menu_url,
+    };
+
+    Ok(Json(restaurant))
 }

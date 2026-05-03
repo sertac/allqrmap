@@ -77,12 +77,18 @@ async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
         .await?;
 
     if count == 0 {
-        tracing::info!("Seeding database with sample restaurants...");
+        tracing::info!("Seeding database with real Turkish restaurants...");
         let restaurants = vec![
-            ("Pasta Palace", 40.7128, -74.0060, "https://example.com/pasta"),
-            ("Burger Bistro", 40.7306, -73.9352, "https://example.com/burger"),
-            ("Sushi Zen", 40.7580, -73.9855, "https://example.com/sushi"),
-            ("Taco Town", 40.7829, -73.9654, "https://example.com/taco"),
+            ("Nusr-Et Steakhouse Sandal Bedesteni", 41.0125, 28.9682, "https://www.nusr-et.com.tr/menu"),
+            ("Zübeyir Ocakbaşı", 41.0368, 28.9800, "https://zubeyirocakbasi.com.tr/menu"),
+            ("Hafiz Mustafa 1864", 41.0142, 28.9774, "https://www.hafizmustafa.com/menu/"),
+            ("Karaköy Güllüoğlu", 41.0245, 28.9775, "https://www.karakoygulluoglu.com/menu"),
+            ("Mikla Restaurant", 41.0345, 28.9814, "https://www.miklarestaurant.com/tr/menu/mikla-menu"),
+            ("Bayramoğlu Döner", 41.0965, 29.0910, "https://www.bayramogludoner.com.tr/menu"),
+            ("Çiya Sofrası", 40.9886, 29.0234, "https://ciya.com.tr/menu/"),
+            ("Günaydın Kasap Steakhouse", 41.0165, 29.1305, "https://www.gunaydinet.com/menu"),
+            ("Aspava Yıldız", 39.9075, 32.8620, "https://aspava.com.tr/menu"),
+            ("7 Mehmet", 36.8835, 30.6580, "https://www.7mehmet.com/menu"),
         ];
 
         for (name, lat, lng, menu_url) in restaurants {

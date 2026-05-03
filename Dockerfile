@@ -1,5 +1,5 @@
 # Stage 1: Build the backend
-FROM rust:1.81-slim-bookworm as builder
+FROM rust:1.85-slim-bookworm as builder
 
 WORKDIR /app
 
@@ -10,7 +10,8 @@ RUN apt-get update && apt-get install -y pkg-config libsqlite3-dev && rm -rf /va
 COPY . .
 
 # Build the application
-RUN cargo build --release
+# Using --locked ensures we use the version 4 lockfile correctly
+RUN cargo build --release --locked
 
 # Stage 2: Create the runtime image
 FROM debian:bookworm-slim

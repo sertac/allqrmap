@@ -144,6 +144,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Application router
     let app = Router::new()
         .route("/", get(serve_index))
+        .route("/api/restaurants", get(get_restaurants_with_coords))
         .route("/api/admin/update-coords", post(update_coords))
         .route("/api/ai-search", post(ai_search))
         .fallback_service(ServeDir::new("static"))
@@ -276,13 +277,15 @@ async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-async fn get_restaurants(
+async fn get_restaurants_with_coords(
     State(pool): State<SqlitePool>,
 ) -> Result<Json<Vec<Restaurant>>, (StatusCode, String)> {
-    let restaurants = sqlx::query_as::<_, Restaurant>("SELECT * FROM restaurants")
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let restaurants = sqlx::query_as::<_, Restaurant>(
+        "SELECT id, name, lat, lng, menu_url FROM restaurants WHERE lat != 0 AND lng != 0"
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(restaurants))
 }

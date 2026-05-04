@@ -36,7 +36,8 @@ struct AiSearchRequest {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct UpdateCoordsRequest {
-    id: i64,
+    id: Option<i64>,
+    name: Option<String>,
     lat: Option<f64>,
     lng: Option<f64>,
     menu_url: Option<String>,
@@ -58,6 +59,7 @@ async fn update_coords(
 
     let mut updated = Vec::new();
     for rest in payload.restaurants {
+        // Try UPDATE first
         let result = sqlx::query(
             "UPDATE restaurants SET lat = COALESCE(?, lat), lng = COALESCE(?, lng), menu_url = COALESCE(?, menu_url) WHERE id = ?"
         )
@@ -70,8 +72,29 @@ async fn update_coords(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         if result.rows_affected() > 0 {
+            // Updated existing
             let r = sqlx::query_as::<_, Restaurant>("SELECT * FROM restaurants WHERE id = ?")
                 .bind(rest.id)
+                .fetch_one(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            updated.push(r);
+        } else if let (Some(name), Some(lat), Some(lng)) = (&rest.name, rest.lat, rest.lng) {
+            // Insert NEW restaurant
+            let result = sqlx::query(
+                "INSERT INTO restaurants (name, lat, lng, menu_url) VALUES (?, ?, ?, ?)"
+            )
+            .bind(&name)
+            .bind(lat)
+            .bind(lng)
+            .bind(&rest.menu_url)
+            .execute(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            
+            let id = result.last_insert_rowid();
+            let r = sqlx::query_as::<_, Restaurant>("SELECT * FROM restaurants WHERE id = ?")
+                .bind(id)
                 .fetch_one(&pool)
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

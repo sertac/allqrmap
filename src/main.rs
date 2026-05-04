@@ -445,18 +445,40 @@ Return ONLY a raw JSON array of the matching IDs (max 5). Example: [1, 2, 5]",
         .to_string();
 
     if cleaned_text.is_empty() {
-        return Ok(Json(vec![]));
+        return Ok(Json(vec![] as Vec<i64>));
     }
 
     // Extract all digits from the response
-    let matching_ids: Vec<i64> = cleaned_text
-        .split(|c: char| !c.is_ascii_digit())
-        .filter(|s| !s.is_empty())
-        .map(|s| s.parse::<i64>())
-        .filter_map(Result::ok)
-        .filter(|&id| id > 0 && id < 10000)
-        .take(10)
-        .collect();
+    let mut current_num = String::new();
+    let mut matching_ids: Vec<i64> = Vec::new();
+    
+    for c in cleaned_text.chars() {
+        if c.is_ascii_digit() {
+            current_num.push(c);
+        } else if !current_num.is_empty() {
+            if let Ok(id) = current_num.parse::<i64>() {
+                if id > 0 && id < 10000 && !matching_ids.contains(&id) {
+                    matching_ids.push(id);
+                }
+            }
+            current_num.clear();
+        }
+    }
+    
+    // Check last number
+    if !current_num.is_empty() {
+        if let Ok(id) = current_num.parse::<i64>() {
+            if id > 0 && id < 10000 && !matching_ids.contains(&id) {
+                matching_ids.push(id);
+            }
+        }
+    }
+
+    matching_ids.truncate(10);
+
+    if matching_ids.is_empty() {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("AI returned no valid IDs: {}", cleaned_text)));
+    }
 
     if matching_ids.is_empty() {
         return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("AI returned no valid IDs: {}", cleaned_text)));

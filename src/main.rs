@@ -446,17 +446,34 @@ Return ONLY a raw JSON array of the matching IDs (max 5). Example: [1, 2, 5]",
         return Ok(Json(vec![]));
     }
 
-    // Try to parse as JSON array first
+    // Parse - try JSON array first, then comma-separated
     let matching_ids: Vec<i64> = if cleaned_text.starts_with('[') {
         serde_json::from_str(&cleaned_text)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("AI returned invalid JSON: {} - Error: {}", cleaned_text, e)))?
-    } else {
-        // Parse as comma-separated integers: "1, 44, 94"
+    } else if cleaned_text.contains(',') {
+        // Parse as comma-separated integers: "1, 44, 94" or "ID: 1, ID: 44"
         cleaned_text
             .split(',')
-            .map(|s| s.trim().parse::<i64>())
-            .filter_map(Result::ok)
+            .flat_map(|s| {
+                let num = s
+                    .chars()
+                    .filter(|c| c.is_ascii_digit())
+                    .collect::<String>()
+                    .parse::<i64>();
+                num.into_iter()
+            })
+            .filter(|&id| id > 0)
+            .take(10)
             .collect()
+    } else {
+        // Single number - try to extract digits
+        cleaned_text
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .collect::<String>()
+            .parse::<i64>()
+            .map(|id| vec![id])
+            .unwrap_or_default()
     };
 
     Ok(Json(matching_ids))

@@ -435,15 +435,31 @@ Return ONLY a raw JSON array of the matching IDs (max 5). Example: [1, 2, 5]",
         })?
         .trim();
 
-    // Clean and parse the response
+// Clean and parse the response
     let cleaned_text = ai_text
         .replace("```json", "")
         .replace("```", "")
+        .replace('[', "")
+        .replace(']', "")
         .trim()
         .to_string();
 
     if cleaned_text.is_empty() {
         return Ok(Json(vec![]));
+    }
+
+    // Extract all digits from the response
+    let matching_ids: Vec<i64> = cleaned_text
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.parse::<i64>())
+        .filter_map(Result::ok)
+        .filter(|&id| id > 0 && id < 10000)
+        .take(10)
+        .collect();
+
+    if matching_ids.is_empty() {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("AI returned no valid IDs: {}", cleaned_text)));
     }
 
     // Parse - try JSON array first, then comma-separated

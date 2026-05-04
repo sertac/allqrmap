@@ -381,12 +381,11 @@ async fn ai_search(
         .collect::<Vec<_>>()
         .join("\n");
 
-    let prompt = format!(
+let prompt = format!(
         "You are a helpful assistant for a restaurant map app. 
-        Based on the following list of restaurants:\n{}\n
-        Which ones best match the user's query: '{}'? 
-        Return ONLY a raw JSON array of the matching IDs (e.g., [1, 2, 5]). 
-        If no matches, return []. Do not include any other text or markdown formatting.",
+Based on the following list of restaurants (ID, Name, Menu URL):\n{}\n
+Which restaurants best match the user's query: '{}'? 
+Return ONLY a raw JSON array of the matching IDs (max 5). Example: [1, 2, 5]",
         restaurants_context, payload.query
     );
 
@@ -403,7 +402,11 @@ async fn ai_search(
                 "parts": [{
                     "text": prompt
                 }]
-            }]
+            }],
+            "generationConfig": {
+                "maxOutputTokens": 100,
+                "temperature": 0.5
+            }
         }))
         .send()
         .await

@@ -1,6 +1,6 @@
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::Html,
     routing::{get, post},
     Json, Router,
@@ -279,7 +279,14 @@ async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
 
 async fn get_restaurants_with_coords(
     State(pool): State<SqlitePool>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<Restaurant>>, (StatusCode, String)> {
+    // Block external requests - only allow from our domain
+    let referer = headers.get("referer").and_then(|v| v.to_str().ok()).unwrap_or("");
+    if !referer.contains("allqrmap") {
+        return Err((StatusCode::FORBIDDEN, "External access denied".into()));
+    }
+    
     let restaurants = sqlx::query_as::<_, Restaurant>(
         "SELECT id, name, lat, lng, menu_url FROM restaurants WHERE lat != 0 AND lng != 0"
     )

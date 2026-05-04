@@ -34,6 +34,54 @@ struct AiSearchRequest {
     query: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct UpdateCoordsRequest {
+    id: i64,
+    lat: Option<f64>,
+    lng: Option<f64>,
+    menu_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BulkUpdateRequest {
+    restaurants: Vec<UpdateCoordsRequest>,
+}
+
+async fn update_coords(
+    State(pool): State<SqlitePool>,
+    Json(payload): Json<BulkUpdateRequest>,
+) -> Result<Json<Vec<Restaurant>>, (StatusCode, String)> {
+    let api_key = std::env::var("ADMIN_API_KEY").unwrap_or_default();
+    if api_key.is_empty() {
+        return Err((StatusCode::FORBIDDEN, "Admin access denied".into()));
+    }
+
+    let mut updated = Vec::new();
+    for rest in payload.restaurants {
+        let result = sqlx::query(
+            "UPDATE restaurants SET lat = COALESCE(?, lat), lng = COALESCE(?, lng), menu_url = COALESCE(?, menu_url) WHERE id = ?"
+        )
+        .bind(rest.lat)
+        .bind(rest.lng)
+        .bind(&rest.menu_url)
+        .bind(rest.id)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        if result.rows_affected() > 0 {
+            let r = sqlx::query_as::<_, Restaurant>("SELECT * FROM restaurants WHERE id = ?")
+                .bind(rest.id)
+                .fetch_one(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            updated.push(r);
+        }
+    }
+
+    Ok(Json(updated))
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
@@ -62,6 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/", get(serve_index))
         .route("/api/restaurants", get(get_restaurants).post(create_restaurant))
+        .route("/api/admin/update-coords", post(update_coords))
         .route("/api/ai-search", post(ai_search))
         .fallback_service(ServeDir::new("static"))
         .layer(cors)

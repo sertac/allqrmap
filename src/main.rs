@@ -144,10 +144,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Application router
     let app = Router::new()
         .route("/", get(serve_index))
-        .route("/api/restaurants", get(get_restaurants_limited).post(create_restaurant))
         .route("/api/admin/update-coords", post(update_coords))
-        .route("/api/ai-search", post(ai_search))
-        .route("/api/map-data", get(get_public_restaurants))
         .fallback_service(ServeDir::new("static"))
         .layer(cors)
         .with_state(pool);

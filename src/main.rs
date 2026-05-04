@@ -145,6 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/", get(serve_index))
         .route("/api/admin/update-coords", post(update_coords))
+        .route("/api/ai-search", post(ai_search))
         .fallback_service(ServeDir::new("static"))
         .layer(cors)
         .with_state(pool);
@@ -381,7 +382,7 @@ async fn ai_search(
 
     let client = reqwest::Client::new();
     let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={}",
+        "https://generativelanguage.googleapis.com/v1/models/gemini-3.0-flash-preview:generateContent?key={}",
         api_key
     );
 

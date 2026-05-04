@@ -146,6 +146,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/", get(serve_index))
         .route("/api/restaurants", get(get_restaurants_with_coords))
         .route("/api/admin/update-coords", post(update_coords))
+        .route("/api/admin/export-verified", get(export_verified))
         .route("/api/ai-search", post(ai_search))
         .fallback_service(ServeDir::new("static"))
         .layer(cors)
@@ -295,6 +296,26 @@ async fn get_restaurants_with_coords(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(restaurants))
+}
+
+async fn export_verified(
+    State(pool): State<SqlitePool>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let api_key = std::env::var("ADMIN_API_KEY").unwrap_or_default();
+    if api_key.is_empty() {
+        return Err((StatusCode::FORBIDDEN, "Admin access denied".into()));
+    }
+    
+    let restaurants = sqlx::query_as::<_, Restaurant>("SELECT id, name, lat, lng, menu_url FROM restaurants")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    
+    let json = serde_json::json!({
+        "restaurants": restaurants
+    });
+    
+    Ok(Json(json))
 }
 
 async fn get_restaurants_limited(

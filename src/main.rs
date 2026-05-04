@@ -433,9 +433,9 @@ Return ONLY a raw JSON array of the matching IDs (max 5). Example: [1, 2, 5]",
             let reason = gemini_response["candidates"][0]["finishReason"].as_str().unwrap_or("unknown");
             (StatusCode::INTERNAL_SERVER_ERROR, format!("AI response blocked or empty. Reason: {}", reason))
         })?
-        .trim();
+.trim();
 
-// Clean and parse the response
+    // Clean and parse the response
     let cleaned_text = ai_text
         .replace("```json", "")
         .replace("```", "")

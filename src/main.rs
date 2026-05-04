@@ -404,8 +404,9 @@ Return ONLY a raw JSON array of the matching IDs (max 5). Example: [1, 2, 5]",
                 }]
             }],
             "generationConfig": {
-                "maxOutputTokens": 100,
-                "temperature": 0.5
+                "maxOutputTokens": 500,
+                "temperature": 0.3,
+                "topP": 0.8
             }
         }))
         .send()
@@ -434,11 +435,21 @@ Return ONLY a raw JSON array of the matching IDs (max 5). Example: [1, 2, 5]",
         })?
         .trim();
 
-    // Remove markdown code blocks if present
-    let cleaned_text = ai_text.replace("```json", "").replace("```", "").trim().to_string();
+    // Remove markdown code blocks and clean up
+    let cleaned_text = ai_text
+        .replace("```json", "")
+        .replace("```", "")
+        .replace("[", "")
+        .replace("]", "")
+        .trim()
+        .to_string();
+
+    if cleaned_text.is_empty() {
+        return Ok(Json(vec![]));
+    }
 
     let matching_ids: Vec<i64> = serde_json::from_str(&cleaned_text)
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, format!("AI returned invalid JSON: {}", cleaned_text)))?;
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("AI returned invalid JSON: {} - Error: {}", cleaned_text, e)))?;
 
     Ok(Json(matching_ids))
 }

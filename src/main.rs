@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
     response::Html,
     routing::{get, post},
@@ -27,6 +27,18 @@ struct CreateRestaurant {
     lat: f64,
     lng: f64,
     menu_url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Pagination {
+    limit: Option<i64>,
+    offset: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct RestaurantList {
+    total: i64,
+    restaurants: Vec<Restaurant>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -135,6 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/restaurants", get(get_restaurants_limited).post(create_restaurant))
         .route("/api/admin/update-coords", post(update_coords))
         .route("/api/ai-search", post(ai_search))
+        .route("/api/map-data", get(get_public_restaurants))
         .fallback_service(ServeDir::new("static"))
         .layer(cors)
         .with_state(pool);
@@ -285,6 +298,32 @@ async fn get_restaurants_limited(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(restaurants))
+}
+
+async fn get_public_restaurants(
+    State(pool): State<SqlitePool>,
+    Query(params): Query<Pagination>,
+) -> Result<Json<RestaurantList>, (StatusCode, String)> {
+    let limit = params.limit.unwrap_or(50).min(100);
+    let offset = params.offset.unwrap_or(0);
+    
+    let restaurants = sqlx::query_as::<_, Restaurant>(
+        "SELECT id, name, lat, lng, menu_url FROM restaurants WHERE lat != 0 AND lng != 0 LIMIT ? OFFSET ?"
+    )
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let total = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM restaurants WHERE lat != 0 AND lng != 0"
+    )
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(RestaurantList { total, restaurants }))
 }
 
 async fn create_restaurant(

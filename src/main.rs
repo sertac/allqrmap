@@ -435,12 +435,10 @@ Return ONLY a raw JSON array of the matching IDs (max 5). Example: [1, 2, 5]",
         })?
         .trim();
 
-    // Remove markdown code blocks and clean up
+    // Clean and parse the response
     let cleaned_text = ai_text
         .replace("```json", "")
         .replace("```", "")
-        .replace("[", "")
-        .replace("]", "")
         .trim()
         .to_string();
 
@@ -448,8 +446,18 @@ Return ONLY a raw JSON array of the matching IDs (max 5). Example: [1, 2, 5]",
         return Ok(Json(vec![]));
     }
 
-    let matching_ids: Vec<i64> = serde_json::from_str(&cleaned_text)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("AI returned invalid JSON: {} - Error: {}", cleaned_text, e)))?;
+    // Try to parse as JSON array first
+    let matching_ids: Vec<i64> = if cleaned_text.starts_with('[') {
+        serde_json::from_str(&cleaned_text)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("AI returned invalid JSON: {} - Error: {}", cleaned_text, e)))?
+    } else {
+        // Parse as comma-separated integers: "1, 44, 94"
+        cleaned_text
+            .split(',')
+            .map(|s| s.trim().parse::<i64>())
+            .filter_map(Result::ok)
+            .collect()
+    };
 
     Ok(Json(matching_ids))
 }

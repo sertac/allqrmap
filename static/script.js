@@ -79,6 +79,7 @@ radiusSlider.addEventListener('input', () => {
     if (radiusCircle && userLat !== null && userLon !== null) {
         radiusCircle.setRadius(currentRadius * 1000);
     }
+    applyFilters();
 });
 
 veganBtn.addEventListener('click', () => {
@@ -93,10 +94,27 @@ halalBtn.addEventListener('click', () => {
     applyFilters();
 });
 
+function getDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const d_lat = (lat2 - lat1) * Math.PI / 180;
+    const d_lon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(d_lat/2) * Math.sin(d_lat/2) +
+             Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+             Math.sin(d_lon/2) * Math.sin(d_lon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function isWithinRadius(lat, lng) {
+    if (userLat === null || userLon === null) return true;
+    return getDistance(userLat, userLon, lat, lng) <= currentRadius;
+}
+
 function applyFilters() {
     allMarkers.forEach(item => {
         const r = item.restaurant;
-        const show = (!filterVegan || r.is_vegan) && (!filterHalal || r.is_halal);
+        const withinRadius = isWithinRadius(r.lat, r.lng);
+        const passesFilter = (!filterVegan || r.is_vegan) && (!filterHalal || r.is_halal);
+        const show = withinRadius && passesFilter;
         if (show) {
             if (!map.hasLayer(item.marker)) item.marker.addTo(map);
         } else {

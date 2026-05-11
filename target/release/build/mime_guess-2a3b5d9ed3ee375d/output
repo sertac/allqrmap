@@ -1,0 +1,1 @@
+cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/Users/sertac/allqrs/target/release/build/mime_guess-2a3b5d9ed3ee375d/out/mime_types_generated.rs

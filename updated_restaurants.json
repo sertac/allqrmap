@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "name": "100 I Hundred",
+    "lat": 41.0563,
+    "lng": 29.0346,
+    "menu_url": "https://hundredistanbul.com/"
+  },
+  {
+    "id": 8,
+    "name": "1A Meyhanesi",
+    "lat": 40.955113,
+    "lng": 29.094563,
+    "menu_url": "https://1ameyhanesi.com/menu"
+  },
+  {
+    "id": 35,
+    "name": "Abidin Usta Seksenlerden Bugüne",
+    "lat": 41.0061,
+    "lng": 28.5682,
+    "menu_url": "https://www.abidinusta.com.tr/menu"
+  },
+  {
+    "id": 53,
+    "name": "Adanalı Şerif Usta",
+    "lat": 40.9475,
+    "lng": 29.2317,
+    "menu_url": "https://haritane.com/kebapci-serif-usta-adana-sofrasi-detay5294122/"
+  },
+  {
+    "id": 61,
+    "name": "Adonis Cafe",
+    "lat": 41.008483,
+    "lng": 28.976246,
+    "menu_url": "https://adonincaferestaurant.com/menu"
+  },
+  {
+    "id": 76,
+    "name": "Agora Restaurant & Meyhane",
+    "lat": 41.0547,
+    "lng": 28.9435,
+    "menu_url": "https://agora1890.com/menu_v2/"
+  }
+]

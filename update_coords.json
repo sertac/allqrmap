@@ -1,0 +1,10 @@
+{
+  "restaurants": [
+    {"id": 1, "lat": 41.0563, "lng": 29.0346, "menu_url": "https://hundredistanbul.com/"},
+    {"id": 8, "lat": 40.955113, "lng": 29.094563, "menu_url": "https://1ameyhanesi.com/menu"},
+    {"id": 35, "lat": 41.0061, "lng": 28.5682, "menu_url": "https://www.abidinusta.com.tr/menu"},
+    {"id": 53, "lat": 40.9475, "lng": 29.2317, "menu_url": "https://haritane.com/kebapci-serif-usta-adana-sofrasi-detay5294122/"},
+    {"id": 61, "lat": 41.008483, "lng": 28.976246, "menu_url": "https://adonincaferestaurant.com/menu"},
+    {"id": 76, "lat": 41.0547, "lng": 28.9435, "menu_url": "https://agora1890.com/menu_v2/"}
+  ]
+}

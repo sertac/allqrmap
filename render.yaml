@@ -1,0 +1,11 @@
+[service]
+name = "allqrmap"
+runtime = "heroku-24"
+build_command = "cargo build --release"
+start_command = "./target/release/allqrmap"
+
+[build]
+image = "heroku/rust"
+
+[environments]
+[environments.development]

@@ -6,7 +6,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{sqlite::SqlitePoolOptions, FromRow, SqlitePool};
+use sqlx::{postgres::PgPoolOptions, FromRow, PgPool};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
@@ -61,7 +61,7 @@ struct BulkUpdateRequest {
 }
 
 async fn update_coords(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<BulkUpdateRequest>,
 ) -> Result<Json<Vec<Restaurant>>, (StatusCode, String)> {
     let api_key = std::env::var("ADMIN_API_KEY").unwrap_or_default();
@@ -73,7 +73,7 @@ async fn update_coords(
     for rest in payload.restaurants {
         // Try UPDATE first
         let result = sqlx::query(
-            "UPDATE restaurants SET lat = COALESCE(?, lat), lng = COALESCE(?, lng), menu_url = COALESCE(?, menu_url) WHERE id = ?"
+            "UPDATE restaurants SET lat = COALESCE($1, lat), lng = COALESCE($2, lng), menu_url = COALESCE($3, menu_url) WHERE id = $4"
         )
         .bind(rest.lat)
         .bind(rest.lng)
@@ -85,7 +85,7 @@ async fn update_coords(
 
         if result.rows_affected() > 0 {
             // Updated existing
-            let r = sqlx::query_as::<_, Restaurant>("SELECT * FROM restaurants WHERE id = ?")
+            let r = sqlx::query_as::<_, Restaurant>("SELECT * FROM restaurants WHERE id = $1")
                 .bind(rest.id)
                 .fetch_one(&pool)
                 .await
@@ -94,7 +94,7 @@ async fn update_coords(
         } else if let (Some(name), Some(lat), Some(lng)) = (&rest.name, rest.lat, rest.lng) {
             // Insert NEW restaurant
             let result = sqlx::query(
-                "INSERT INTO restaurants (name, lat, lng, menu_url) VALUES (?, ?, ?, ?)"
+                "INSERT INTO restaurants (name, lat, lng, menu_url) VALUES ($1, $2, $3, $4)"
             )
             .bind(&name)
             .bind(lat)
@@ -104,12 +104,14 @@ async fn update_coords(
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             
-            let id = result.last_insert_rowid();
-            let r = sqlx::query_as::<_, Restaurant>("SELECT * FROM restaurants WHERE id = ?")
-                .bind(id)
-                .fetch_one(&pool)
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            // Fetch the inserted record
+            let r = sqlx::query_as::<_, Restaurant>(
+                "SELECT id, name, lat, lng, menu_url FROM restaurants WHERE name = $1 ORDER BY id DESC LIMIT 1"
+            )
+            .bind(&rest.name)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             updated.push(r);
         }
     }
@@ -128,11 +130,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Database setup
-    let db_url = "sqlite:restaurants.db?mode=rwc";
-    let pool = SqlitePoolOptions::new()
+    // Database setup - Neon PostgreSQL
+    let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect(db_url)
+        .connect(&std::env::var("DATABASE_URL").expect("DATABASE_URL must be set"))
         .await?;
 
     // Initialize database schema and seed data
@@ -161,13 +162,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+async fn init_db(pool: &PgPool) -> Result<(), sqlx::Error> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS restaurants (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id BIGSERIAL PRIMARY KEY,
             name TEXT NOT NULL,
-            lat REAL NOT NULL,
-            lng REAL NOT NULL,
+            lat DOUBLE PRECISION NOT NULL,
+            lng DOUBLE PRECISION NOT NULL,
             menu_url TEXT NOT NULL
         )",
     )
@@ -265,7 +266,7 @@ async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
         }
 
         for (name, lat, lng, menu_url) in restaurants {
-            sqlx::query("INSERT INTO restaurants (name, lat, lng, menu_url) VALUES (?, ?, ?, ?)")
+            sqlx::query("INSERT INTO restaurants (name, lat, lng, menu_url) VALUES ($1, $2, $3, $4)")
                 .bind(name)
                 .bind(lat)
                 .bind(lng)
@@ -279,7 +280,7 @@ async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
 }
 
 async fn get_restaurants_with_coords(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<Restaurant>>, (StatusCode, String)> {
     // Block external requests - only allow from our domain
@@ -299,7 +300,7 @@ async fn get_restaurants_with_coords(
 }
 
 async fn export_verified(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let api_key = std::env::var("ADMIN_API_KEY").unwrap_or_default();
     if api_key.is_empty() {
@@ -319,7 +320,7 @@ async fn export_verified(
 }
 
 async fn get_restaurants_limited(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
 ) -> Result<Json<Vec<Restaurant>>, (StatusCode, String)> {
     let restaurants = sqlx::query_as::<_, Restaurant>("SELECT * FROM restaurants WHERE lat != 0 AND lng != 0")
         .fetch_all(&pool)
@@ -330,14 +331,14 @@ async fn get_restaurants_limited(
 }
 
 async fn get_public_restaurants(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Query(params): Query<Pagination>,
 ) -> Result<Json<RestaurantList>, (StatusCode, String)> {
     let limit = params.limit.unwrap_or(50).min(100);
     let offset = params.offset.unwrap_or(0);
     
     let restaurants = sqlx::query_as::<_, Restaurant>(
-        "SELECT id, name, lat, lng, menu_url FROM restaurants WHERE lat != 0 AND lng != 0 LIMIT ? OFFSET ?"
+        "SELECT id, name, lat, lng, menu_url FROM restaurants WHERE lat != 0 AND lng != 0 LIMIT $1 OFFSET $2"
     )
     .bind(limit)
     .bind(offset)
@@ -356,13 +357,16 @@ async fn get_public_restaurants(
 }
 
 async fn create_restaurant(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<CreateRestaurant>,
 ) -> Result<Json<Restaurant>, (StatusCode, String)> {
     let result = sqlx::query(
-        "INSERT INTO restaurants (name, lat, lng, menu_url) VALUES (?, ?, ?, ?)"
+        "INSERT INTO restaurants (name, lat, lng, menu_url) VALUES ($1, $2, $3, $4)"
     )
     .bind(&payload.name)
+    .bind(payload.lat)
+    .bind(payload.lng)
+.bind(&payload.menu_url)
     .bind(payload.lat)
     .bind(payload.lng)
     .bind(&payload.menu_url)
@@ -370,10 +374,8 @@ async fn create_restaurant(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let id = result.last_insert_rowid();
-
     let restaurant = Restaurant {
-        id,
+        id: 0, // will be assigned by DB
         name: payload.name,
         lat: payload.lat,
         lng: payload.lng,
@@ -384,7 +386,7 @@ async fn create_restaurant(
 }
 
 async fn ai_search(
-    State(pool): State<SqlitePool>,
+    State(pool): State<PgPool>,
     Json(payload): Json<AiSearchRequest>,
 ) -> Result<Json<Vec<i64>>, (StatusCode, String)> {
     let api_key = std::env::var("GEMINI_API_KEY")

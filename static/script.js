@@ -32,6 +32,7 @@ const radiusLabel = document.getElementById('radius-label');
 let userLat = null;
 let userLon = null;
 let currentRadius = 5;
+let radiusCircle = null;
 
 // 1. Geolocation on startup
 function centerOnUser() {
@@ -41,6 +42,15 @@ function centerOnUser() {
             userLat = latitude;
             userLon = longitude;
             map.setView([latitude, longitude], 14);
+            if (radiusCircle) map.removeLayer(radiusCircle);
+            radiusCircle = L.circle([latitude, longitude], {
+                radius: currentRadius * 1000,
+                color: "#007bff",
+                weight: 2,
+                opacity: 0.6,
+                fillColor: "#007bff",
+                fillOpacity: 0.1
+            }).addTo(map);
             L.circleMarker([latitude, longitude], {
                 radius: 8,
                 fillColor: "#007bff",
@@ -62,6 +72,9 @@ function centerOnUser() {
 radiusSlider.addEventListener('input', () => {
     currentRadius = parseInt(radiusSlider.value);
     radiusLabel.textContent = `📍 ${currentRadius} km`;
+    if (radiusCircle && userLat !== null && userLon !== null) {
+        radiusCircle.setRadius(currentRadius * 1000);
+    }
 });
 
 // Fetch restaurants from the API

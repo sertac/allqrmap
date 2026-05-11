@@ -27,12 +27,19 @@ const latInput = document.getElementById('res-lat');
 const lngInput = document.getElementById('res-lng');
 const searchInput = document.getElementById('search-input');
 const suggestionsList = document.getElementById('search-suggestions');
+const radiusSlider = document.getElementById('radius-slider');
+const radiusLabel = document.getElementById('radius-label');
+let userLat = null;
+let userLon = null;
+let currentRadius = 5;
 
 // 1. Geolocation on startup
 function centerOnUser() {
     if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition((position) => {
             const { latitude, longitude } = position.coords;
+            userLat = latitude;
+            userLon = longitude;
             map.setView([latitude, longitude], 14);
             L.circleMarker([latitude, longitude], {
                 radius: 8,
@@ -51,6 +58,11 @@ function centerOnUser() {
         });
     }
 }
+
+radiusSlider.addEventListener('input', () => {
+    currentRadius = parseInt(radiusSlider.value);
+    radiusLabel.textContent = `📍 ${currentRadius} km`;
+});
 
 // Fetch restaurants from the API
 async function fetchRestaurants() {
@@ -156,10 +168,16 @@ aiBtn.onclick = async () => {
 
     aiBtn.classList.add('loading');
     try {
+        const body = { query };
+        if (userLat !== null && userLon !== null) {
+            body.user_lat = userLat;
+            body.user_lon = userLon;
+            body.radius = currentRadius;
+        }
         const response = await fetch('/api/ai-search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query })
+            body: JSON.stringify(body)
         });
 
         if (response.ok) {

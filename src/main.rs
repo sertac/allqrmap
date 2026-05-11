@@ -44,6 +44,9 @@ struct RestaurantList {
 #[derive(Debug, Serialize, Deserialize)]
 struct AiSearchRequest {
     query: String,
+    user_lat: Option<f64>,
+    user_lon: Option<f64>,
+    radius: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -404,12 +407,25 @@ async fn ai_search(
         .collect::<Vec<_>>()
         .join("\n");
 
+    let radius_filter_hint = if let (Some(lat), Some(lon), Some(radius)) = (payload.user_lat, payload.user_lon, payload.radius) {
+        let filtered: Vec<_> = restaurants.iter()
+            .filter(|r| {
+                let d = haversine_distance(lat, lon, r.lat, r.lng);
+                d <= radius
+            })
+            .map(|r| r.id)
+            .collect();
+        format!("\n\nIMPORTANT: User is at ({:.4}, {:.4}) within {:.0} km radius. Only return IDs of restaurants within {} km of user. Nearby IDs: {:?}", lat, lon, radius, radius, filtered)
+    } else {
+        String::new()
+    };
+
 let prompt = format!(
         "You are a helpful assistant for a restaurant map app. 
 Based on the following list of restaurants (ID, Name, Menu URL):\n{}\n
 Which restaurants best match the user's query: '{}'? 
-Return ONLY a raw JSON array of the matching IDs (max 5). Example: [1, 2, 5]",
-        restaurants_context, payload.query
+Return ONLY a raw JSON array of the matching IDs (max 5). Example: [1, 2, 5]{}",
+        restaurants_context, payload.query, radius_filter_hint
     );
 
     let client = reqwest::Client::new();
@@ -504,6 +520,16 @@ Return ONLY a raw JSON array of the matching IDs (max 5). Example: [1, 2, 5]",
     }
 
     Ok(Json(matching_ids))
+}
+
+fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    const R: f64 = 6371.0;
+    let d_lat = (lat2 - lat1).to_radians();
+    let d_lon = (lon2 - lon1).to_radians();
+    let a = (d_lat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (d_lon / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().asin();
+    R * c
 }
 
 async fn serve_index() -> Result<Html<String>, (StatusCode, String)> {

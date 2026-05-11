@@ -16,7 +16,7 @@ body, html {
     left: 50%;
     transform: translateX(-50%);
     z-index: 1000;
-    width: 450px;
+    width: 580px;
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -24,6 +24,7 @@ body, html {
 
 .search-bar {
     display: flex;
+    align-items: center;
     gap: 10px;
     width: 100%;
 }
@@ -99,6 +100,41 @@ body, html {
     box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     font-size: 16px;
     outline: none;
+}
+
+#radius-widget {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: white;
+    padding: 0 12px;
+    border-radius: 25px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+#radius-label {
+    font-size: 13px;
+    color: #333;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+#radius-slider {
+    width: 80px;
+    height: 6px;
+    -webkit-appearance: none;
+    background: #ddd;
+    border-radius: 3px;
+    outline: none;
+}
+
+#radius-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #6f42c1;
+    border-radius: 50%;
+    cursor: pointer;
 }
 
 #add-btn {

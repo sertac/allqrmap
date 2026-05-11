@@ -19,6 +19,8 @@ struct Restaurant {
     lat: f64,
     lng: f64,
     menu_url: String,
+    is_vegan: bool,
+    is_halal: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -27,6 +29,8 @@ struct CreateRestaurant {
     lat: f64,
     lng: f64,
     menu_url: String,
+    is_vegan: Option<bool>,
+    is_halal: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -56,6 +60,8 @@ struct UpdateCoordsRequest {
     lat: Option<f64>,
     lng: Option<f64>,
     menu_url: Option<String>,
+    is_vegan: Option<bool>,
+    is_halal: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -76,12 +82,14 @@ async fn update_coords(
     for rest in payload.restaurants {
         // Try UPDATE first
         let result = sqlx::query(
-            "UPDATE restaurants SET lat = COALESCE($1, lat), lng = COALESCE($2, lng), menu_url = COALESCE($3, menu_url) WHERE id = $4"
+            "UPDATE restaurants SET lat = COALESCE($1, lat), lng = COALESCE($2, lng), menu_url = COALESCE($3, menu_url), is_vegan = COALESCE($5, is_vegan), is_halal = COALESCE($6, is_halal) WHERE id = $4"
         )
         .bind(rest.lat)
         .bind(rest.lng)
         .bind(&rest.menu_url)
         .bind(rest.id)
+        .bind(rest.is_vegan)
+        .bind(rest.is_halal)
         .execute(&pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -97,12 +105,14 @@ async fn update_coords(
         } else if let (Some(name), Some(lat), Some(lng)) = (&rest.name, rest.lat, rest.lng) {
             // Insert NEW restaurant
             let result = sqlx::query(
-                "INSERT INTO restaurants (name, lat, lng, menu_url) VALUES ($1, $2, $3, $4)"
+                "INSERT INTO restaurants (name, lat, lng, menu_url, is_vegan, is_halal) VALUES ($1, $2, $3, $4, $5, $6)"
             )
             .bind(&name)
             .bind(lat)
             .bind(lng)
             .bind(&rest.menu_url)
+            .bind(rest.is_vegan.unwrap_or(false))
+            .bind(rest.is_halal.unwrap_or(false))
             .execute(&pool)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -172,11 +182,22 @@ async fn init_db(pool: &PgPool) -> Result<(), sqlx::Error> {
             name TEXT NOT NULL,
             lat DOUBLE PRECISION NOT NULL,
             lng DOUBLE PRECISION NOT NULL,
-            menu_url TEXT NOT NULL
+            menu_url TEXT NOT NULL,
+            is_vegan BOOLEAN NOT NULL DEFAULT FALSE,
+            is_halal BOOLEAN NOT NULL DEFAULT FALSE
         )",
     )
     .execute(pool)
     .await?;
+
+    sqlx::query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS is_vegan BOOLEAN NOT NULL DEFAULT FALSE")
+        .execute(pool)
+        .await
+        .ok();
+    sqlx::query("ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS is_halal BOOLEAN NOT NULL DEFAULT FALSE")
+        .execute(pool)
+        .await
+        .ok();
 
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM restaurants")
         .fetch_one(pool)
@@ -185,95 +206,81 @@ async fn init_db(pool: &PgPool) -> Result<(), sqlx::Error> {
     if count == 0 {
         tracing::info!("Seeding database with expanded real Turkish restaurants...");
         
-        let mut restaurants: Vec<(String, f64, f64, String)> = vec![
+        let mut restaurants: Vec<(String, f64, f64, String, bool, bool)> = vec![
             // Fine Dining & Famous
-            ("Nusr-Et Steakhouse Sandal Bedesteni", 41.0125, 28.9682, "https://www.nusr-et.com.tr/menu"),
-            ("Mikla Restaurant", 41.0345, 28.9814, "https://www.miklarestaurant.com/tr/menu/mikla-menu"),
-            ("Zübeyir Ocakbaşı", 41.0368, 28.9800, "https://zubeyirocakbasi.com.tr/menu"),
-            ("Karaköy Güllüoğlu", 41.0245, 28.9775, "https://www.karakoygulluoglu.com/menu"),
-            ("Hafiz Mustafa 1864 Sultanahmet", 41.0142, 28.9774, "https://www.hafizmustafa.com/menu/"),
-            ("Karaköy Lokantası", 41.0235, 28.9785, "https://www.karakoylokantasi.com/menu"),
-            ("Hacı Abdullah Lokantası", 41.0353, 28.9803, "https://www.haciabdullah.com.tr/menu"),
-            ("1924 Istanbul", 41.0315, 28.9755, "https://www.1924istanbul.com/menu"),
-            
-            // Beşiktaş
-            ("Karadeniz Döner Asım Usta", 41.0425, 29.0072, "https://www.karadenizdonerasimusta.com/menu"),
-            ("Feriye Lokantası", 41.0461, 29.0214, "https://www.feriye.com/menu"),
-            ("Alaf Kuruçeşme", 41.0535, 29.0345, "https://www.alafkurucesme.com/menu"),
-            ("Tuğra Restaurant", 41.0441, 29.0167, "https://www.tugrarestaurant.com.tr/menu"),
-            ("Vogue Restaurant", 41.0415, 29.0012, "https://www.voguerestaurantandbar.com/menu"),
-            
-            // Kadıköy
-            ("Borsam Taşfırın", 40.9892, 29.0261, "https://www.borsamtasfirin.com/menu"),
-            ("Yanyalı Fehmi Lokantası", 40.9915, 29.0275, "https://www.yanyali.com/menu"),
-            ("The Townhouse", 40.9615, 29.0855, "https://thetownhouseistanbul.com/menu"),
-            ("Viktor Levi Şarap Evi", 40.9865, 29.0285, "https://viktorlevisarapevi.com/menu"),
-            
-            // Nişantaşı & Şişli
-            ("Delicatessen Nişantaşı", 41.0485, 28.9935, "https://www.delicatessen.com.tr/menu"),
-            ("Göreme Muhallebicisi", 41.0515, 28.9815, "https://www.gorememuhallebicisi.com/menu"),
-            ("Adana Ocakbaşı Kurtuluş", 41.0525, 28.9845, "https://www.adanaocakbasi.com/menu"),
-            ("Spago Istanbul", 41.0475, 28.9954, "https://www.spago.com.tr/menu"),
+            ("Nusr-Et Steakhouse Sandal Bedesteni", 41.0125, 28.9682, "https://www.nusr-et.com.tr/menu", false, true),
+            ("Mikla Restaurant", 41.0345, 28.9814, "https://www.miklarestaurant.com/tr/menu/mikla-menu", false, false),
+            ("Zübeyir Ocakbaşı", 41.0368, 28.9800, "https://zubeyirocakbasi.com.tr/menu", false, true),
+            ("Karaköy Güllüoğlu", 41.0245, 28.9775, "https://www.karakoygulluoglu.com/menu", false, true),
+            ("Hafiz Mustafa 1864 Sultanahmet", 41.0142, 28.9774, "https://www.hafizmustafa.com/menu/", false, true),
+            ("Karaköy Lokantası", 41.0235, 28.9785, "https://www.karakoylokantasi.com/menu", false, false),
+            ("Hacı Abdullah Lokantası", 41.0353, 28.9803, "https://www.haciabdullah.com.tr/menu", false, false),
+            ("1924 Istanbul", 41.0315, 28.9755, "https://www.1924istanbul.com/menu", false, false),
+            ("Karadeniz Döner Asım Usta", 41.0425, 29.0072, "https://www.karadenizdonerasimusta.com/menu", false, true),
+            ("Feriye Lokantası", 41.0461, 29.0214, "https://www.feriye.com/menu", false, false),
+            ("Alaf Kuruçeşme", 41.0535, 29.0345, "https://www.alafkurucesme.com/menu", false, true),
+            ("Tuğra Restaurant", 41.0441, 29.0167, "https://www.tugrarestaurant.com.tr/menu", false, false),
+            ("Vogue Restaurant", 41.0415, 29.0012, "https://www.voguerestaurantandbar.com/menu", false, false),
+            ("Borsam Taşfırın", 40.9892, 29.0261, "https://www.borsamtasfirin.com/menu", false, true),
+            ("Yanyalı Fehmi Lokantası", 40.9915, 29.0275, "https://www.yanyali.com/menu", false, false),
+            ("The Townhouse", 40.9615, 29.0855, "https://thetownhouseistanbul.com/menu", false, false),
+            ("Viktor Levi Şarap Evi", 40.9865, 29.0285, "https://viktorlevisarapevi.com/menu", false, false),
+            ("Delicatessen Nişantaşı", 41.0485, 28.9935, "https://www.delicatessen.com.tr/menu", false, false),
+            ("Göreme Muhallebicisi", 41.0515, 28.9815, "https://www.gorememuhallebicisi.com/menu", false, true),
+            ("Adana Ocakbaşı Kurtuluş", 41.0525, 28.9845, "https://www.adanaocakbasi.com/menu", false, true),
+            ("Spago Istanbul", 41.0475, 28.9954, "https://www.spago.com.tr/menu", false, false),
             
             // Chain: Midpoint
-            ("Midpoint Nişantaşı", 41.0492, 28.9931, "https://www.midpoint.com.tr/menu"),
-            ("Midpoint Bağdat Caddesi", 40.9634, 29.0682, "https://www.midpoint.com.tr/menu"),
-            ("Midpoint Tünel", 41.0281, 28.9754, "https://www.midpoint.com.tr/menu"),
-            ("Midpoint Watergarden", 40.9931, 29.1014, "https://www.midpoint.com.tr/menu"),
-            ("Midpoint Kanyon", 41.0782, 29.0114, "https://www.midpoint.com.tr/menu"),
-            
-            // Chain: BigChefs
-            ("BigChefs Tarabya", 41.1385, 29.0562, "https://www.bigchefs.com.tr/menu"),
-            ("BigChefs Tünel", 41.0283, 28.9751, "https://www.bigchefs.com.tr/menu"),
-            ("BigChefs Metropol", 40.9942, 29.1215, "https://www.bigchefs.com.tr/menu"),
-            ("BigChefs Gayrettepe", 41.0681, 29.0064, "https://www.bigchefs.com.tr/menu"),
-            ("BigChefs Anadolu Hisarı", 41.0825, 29.0664, "https://www.bigchefs.com.tr/menu"),
-            
-            // Chain: Cookshop
-            ("Cookshop Akaretler", 41.0412, 29.0004, "https://cookshop.com.tr/menu"),
-            ("Cookshop Galataport", 41.0265, 28.9842, "https://cookshop.com.tr/menu"),
-            ("Cookshop Caddebostan", 40.9631, 29.0635, "https://cookshop.com.tr/menu"),
-            ("Cookshop Vadistanbul", 41.1072, 28.9874, "https://cookshop.com.tr/menu"),
-            ("Cookshop Emaar Square", 41.0045, 29.0654, "https://cookshop.com.tr/menu"),
-            
-            // Chain: Happy Moon's
-            ("Happy Moon's Kadıköy", 40.9882, 29.0314, "https://happygroup.com.tr/menu/"),
-            ("Happy Moon's Emaar", 41.0045, 29.0662, "https://happygroup.com.tr/menu/"),
-            ("Happy Moon's City's Nişantaşı", 41.0501, 28.9934, "https://happygroup.com.tr/menu/"),
-            ("Happy Moon's Akasya", 41.0012, 29.0541, "https://happygroup.com.tr/menu/"),
-            ("Happy Moon's Maltepe Park", 40.9234, 29.1564, "https://happygroup.com.tr/menu/"),
-            
-            // Local Heroes & Others
-            ("Bayramoğlu Döner", 41.0965, 29.0910, "https://www.bayramogludoner.com.tr/menu"),
-            ("Çiya Sofrası", 40.9886, 29.0234, "https://ciya.com.tr/menu/"),
-            ("Günaydın Steakhouse İstinye", 41.1085, 29.0212, "https://www.gunaydinet.com/menu"),
-            ("Namlı Gurme Karaköy", 41.0242, 28.9745, "https://www.namligurme.com.tr/menu"),
-            ("Mangerie Bebek", 41.0765, 29.0434, "https://www.mangeriebebek.com/menu"),
-            ("Lucca Bebek", 41.0772, 29.0445, "https://www.luccastyle.com/menu"),
-            
-            // Other Cities
-            ("Aspava Yıldız (Ankara)", 39.9075, 32.8620, "https://aspava.com.tr/menu"),
-            ("7 Mehmet (Antalya)", 36.8835, 30.6580, "https://www.7mehmet.com/menu"),
-            ("Balıkçı Kenan (Antalya)", 36.8845, 30.7012, "https://www.balikcikenan.com/menu"),
-            ("Deniz Restaurant (İzmir)", 38.4354, 27.1384, "https://www.denizrestaurant.com.tr/menu"),
-        ].into_iter().map(|(n, la, ln, m)| (n.to_string(), la, ln, m.to_string())).collect();
+            ("Midpoint Nişantaşı", 41.0492, 28.9931, "https://www.midpoint.com.tr/menu", false, false),
+            ("Midpoint Bağdat Caddesi", 40.9634, 29.0682, "https://www.midpoint.com.tr/menu", false, false),
+            ("Midpoint Tünel", 41.0281, 28.9754, "https://www.midpoint.com.tr/menu", false, false),
+            ("Midpoint Watergarden", 40.9931, 29.1014, "https://www.midpoint.com.tr/menu", false, false),
+            ("Midpoint Kanyon", 41.0782, 29.0114, "https://www.midpoint.com.tr/menu", false, false),
+            ("BigChefs Tarabya", 41.1385, 29.0562, "https://www.bigchefs.com.tr/menu", false, false),
+            ("BigChefs Tünel", 41.0283, 28.9751, "https://www.bigchefs.com.tr/menu", false, false),
+            ("BigChefs Metropol", 40.9942, 29.1215, "https://www.bigchefs.com.tr/menu", false, false),
+            ("BigChefs Gayrettepe", 41.0681, 29.0064, "https://www.bigchefs.com.tr/menu", false, false),
+            ("BigChefs Anadolu Hisarı", 41.0825, 29.0664, "https://www.bigchefs.com.tr/menu", false, false),
+            ("Cookshop Akaretler", 41.0412, 29.0004, "https://cookshop.com.tr/menu", false, false),
+            ("Cookshop Galataport", 41.0265, 28.9842, "https://cookshop.com.tr/menu", false, false),
+            ("Cookshop Caddebostan", 40.9631, 29.0635, "https://cookshop.com.tr/menu", false, false),
+            ("Cookshop Vadistanbul", 41.1072, 28.9874, "https://cookshop.com.tr/menu", false, false),
+            ("Cookshop Emaar Square", 41.0045, 29.0654, "https://cookshop.com.tr/menu", false, false),
+            ("Happy Moon's Kadıköy", 40.9882, 29.0314, "https://happygroup.com.tr/menu/", false, false),
+            ("Happy Moon's Emaar", 41.0045, 29.0662, "https://happygroup.com.tr/menu/", false, false),
+            ("Happy Moon's City's Nişantaşı", 41.0501, 28.9934, "https://happygroup.com.tr/menu/", false, false),
+            ("Happy Moon's Akasya", 41.0012, 29.0541, "https://happygroup.com.tr/menu/", false, false),
+            ("Happy Moon's Maltepe Park", 40.9234, 29.1564, "https://happygroup.com.tr/menu/", false, false),
+            ("Bayramoğlu Döner", 41.0965, 29.0910, "https://www.bayramogludoner.com.tr/menu", false, true),
+            ("Çiya Sofrası", 40.9886, 29.0234, "https://ciya.com.tr/menu/", false, true),
+            ("Günaydın Steakhouse İstinye", 41.1085, 29.0212, "https://www.gunaydinet.com/menu", false, true),
+            ("Namlı Gurme Karaköy", 41.0242, 28.9745, "https://www.namligurme.com.tr/menu", false, true),
+            ("Mangerie Bebek", 41.0765, 29.0434, "https://www.mangeriebebek.com/menu", false, false),
+            ("Lucca Bebek", 41.0772, 29.0445, "https://www.luccastyle.com/menu", false, false),
+            ("Aspava Yıldız (Ankara)", 39.9075, 32.8620, "https://aspava.com.tr/menu", false, true),
+            ("7 Mehmet (Antalya)", 36.8835, 30.6580, "https://www.7mehmet.com/menu", false, true),
+            ("Balıkçı Kenan (Antalya)", 36.8845, 30.7012, "https://www.balikcikenan.com/menu", false, true),
+            ("Deniz Restaurant (İzmir)", 38.4354, 27.1384, "https://www.denizrestaurant.com.tr/menu", false, true),
+        ].into_iter().map(|(n, la, ln, m, v, h)| (n.to_string(), la, ln, m.to_string(), v, h)).collect();
 
         // Check if external restaurants.json exists and import it
         if let Ok(content) = std::fs::read_to_string("restaurants.json") {
             if let Ok(external_list) = serde_json::from_str::<Vec<CreateRestaurant>>(&content) {
                 tracing::info!("Importing {} restaurants from restaurants.json", external_list.len());
                 for res in external_list {
-                    restaurants.push((res.name, res.lat, res.lng, res.menu_url));
+                    restaurants.push((res.name, res.lat, res.lng, res.menu_url, res.is_vegan.unwrap_or(false), res.is_halal.unwrap_or(false)));
                 }
             }
         }
 
-        for (name, lat, lng, menu_url) in restaurants {
-            sqlx::query("INSERT INTO restaurants (name, lat, lng, menu_url) VALUES ($1, $2, $3, $4)")
+        for (name, lat, lng, menu_url, is_vegan, is_halal) in restaurants {
+            sqlx::query("INSERT INTO restaurants (name, lat, lng, menu_url, is_vegan, is_halal) VALUES ($1, $2, $3, $4, $5, $6)")
                 .bind(name)
                 .bind(lat)
                 .bind(lng)
                 .bind(menu_url)
+                .bind(is_vegan)
+                .bind(is_halal)
                 .execute(pool)
                 .await?;
         }
@@ -293,7 +300,7 @@ async fn get_restaurants_with_coords(
     }
     
     let restaurants = sqlx::query_as::<_, Restaurant>(
-        "SELECT id, name, lat, lng, menu_url FROM restaurants WHERE lat != 0 AND lng != 0"
+        "SELECT id, name, lat, lng, menu_url, is_vegan, is_halal FROM restaurants WHERE lat != 0 AND lng != 0"
     )
     .fetch_all(&pool)
     .await
@@ -378,11 +385,13 @@ async fn create_restaurant(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let restaurant = Restaurant {
-        id: 0, // will be assigned by DB
+        id: 0,
         name: payload.name,
         lat: payload.lat,
         lng: payload.lng,
         menu_url: payload.menu_url,
+        is_vegan: payload.is_vegan.unwrap_or(false),
+        is_halal: payload.is_halal.unwrap_or(false),
     };
 
     Ok(Json(restaurant))
@@ -403,7 +412,7 @@ async fn ai_search(
 
     let restaurants_context = restaurants
         .iter()
-        .map(|r| format!("ID: {}, Name: {}, Menu: {}", r.id, r.name, r.menu_url))
+        .map(|r| format!("ID: {}, Name: {}, Vegan: {}, Halal: {}, Menu: {}", r.id, r.name, r.is_vegan, r.is_halal, r.menu_url))
         .collect::<Vec<_>>()
         .join("\n");
 

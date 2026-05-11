@@ -24,6 +24,10 @@
                 <span id="radius-label">📍 5 km</span>
                 <input type="range" id="radius-slider" min="1" max="50" value="5">
             </div>
+            <div id="filter-buttons">
+                <button id="vegan-btn" class="filter-btn" title="Vegan">🌱 Vegan</button>
+                <button id="halal-btn" class="filter-btn" title="Halal">☪ Helal</button>
+            </div>
             <button id="ai-btn" title="AI Search">✨</button>
             <button id="add-btn" title="Add Restaurant">+</button>
         </div>
@@ -44,6 +48,10 @@
             <form id="add-form">
                 <input type="text" id="res-name" placeholder="Restaurant Name" required>
                 <input type="url" id="res-menu" placeholder="Menu URL (e.g. https://...)" required>
+                <div class="checkbox-row">
+                    <label><input type="checkbox" id="res-vegan"> 🌱 Vegan</label>
+                    <label><input type="checkbox" id="res-halal"> ☪ Helal</label>
+                </div>
                 <p class="hint">Click on the mini-map below to set the location:</p>
                 <div id="mini-map"></div>
                 <input type="hidden" id="res-lat">

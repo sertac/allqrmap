@@ -29,10 +29,14 @@ const searchInput = document.getElementById('search-input');
 const suggestionsList = document.getElementById('search-suggestions');
 const radiusSlider = document.getElementById('radius-slider');
 const radiusLabel = document.getElementById('radius-label');
+const veganBtn = document.getElementById('vegan-btn');
+const halalBtn = document.getElementById('halal-btn');
 let userLat = null;
 let userLon = null;
 let currentRadius = 5;
 let radiusCircle = null;
+let filterVegan = false;
+let filterHalal = false;
 
 // 1. Geolocation on startup
 function centerOnUser() {
@@ -77,6 +81,30 @@ radiusSlider.addEventListener('input', () => {
     }
 });
 
+veganBtn.addEventListener('click', () => {
+    filterVegan = !filterVegan;
+    veganBtn.classList.toggle('active', filterVegan);
+    applyFilters();
+});
+
+halalBtn.addEventListener('click', () => {
+    filterHalal = !filterHalal;
+    halalBtn.classList.toggle('active', filterHalal);
+    applyFilters();
+});
+
+function applyFilters() {
+    allMarkers.forEach(item => {
+        const r = item.restaurant;
+        const show = (!filterVegan || r.is_vegan) && (!filterHalal || r.is_halal);
+        if (show) {
+            if (!map.hasLayer(item.marker)) item.marker.addTo(map);
+        } else {
+            if (map.hasLayer(item.marker)) map.removeLayer(item.marker);
+        }
+    });
+}
+
 // Fetch restaurants from the API
 async function fetchRestaurants() {
     try {
@@ -97,10 +125,15 @@ function renderMarkers(restaurants) {
 
 function addMarkerToMap(restaurant) {
     const marker = L.marker([restaurant.lat, restaurant.lng]).addTo(map);
+    const badges = [];
+    if (restaurant.is_vegan) badges.push('🌱');
+    if (restaurant.is_halal) badges.push('☪');
+    const badgeHtml = badges.length ? `<div class="restaurant-badges">${badges.join(' ')}</div>` : '';
     const popupDiv = document.createElement('div');
     popupDiv.className = 'popup-content';
     popupDiv.innerHTML = `
         <h3>${restaurant.name}</h3>
+        ${badgeHtml}
         <div id="qr-${restaurant.id}" class="qr-container"></div>
         <a href="${restaurant.menu_url}" target="_blank" class="menu-link">Open Menu</a>
     `;
@@ -271,12 +304,14 @@ addForm.onsubmit = async (e) => {
     const menu_url = document.getElementById('res-menu').value;
     const lat = parseFloat(latInput.value);
     const lng = parseFloat(lngInput.value);
+    const is_vegan = document.getElementById('res-vegan').checked;
+    const is_halal = document.getElementById('res-halal').checked;
 
     try {
         const response = await fetch('/api/restaurants', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, menu_url, lat, lng })
+            body: JSON.stringify({ name, menu_url, lat, lng, is_vegan, is_halal })
         });
         if (response.ok) {
             const newRes = await response.json();

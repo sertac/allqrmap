@@ -16,7 +16,7 @@ body, html {
     left: 50%;
     transform: translateX(-50%);
     z-index: 1000;
-    width: 580px;
+    width: min(580px, calc(100vw - 20px));
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -25,8 +25,9 @@ body, html {
 .search-bar {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
+    flex-wrap: wrap;
 }
 
 .suggestions-list {
@@ -102,16 +103,6 @@ body, html {
     outline: none;
 }
 
-#radius-widget {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: white;
-    padding: 0 12px;
-    border-radius: 25px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-}
-
 #radius-label {
     font-size: 13px;
     color: #333;
@@ -158,15 +149,30 @@ body, html {
     justify-content: center;
 }
 
+.filter-btn.round-btn {
+    border-radius: 50%;
+}
+
 .filter-btn:hover {
     border-color: #6f42c1;
-    color: #6f42c1;
+    transform: scale(1.05);
 }
 
 .filter-btn.active {
     background: #6f42c1;
     border-color: #6f42c1;
     color: white;
+}
+
+#radius-widget {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: white;
+    padding: 0 10px;
+    border-radius: 25px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    flex-shrink: 0;
 }
 
 #add-btn {

@@ -19,16 +19,16 @@
 <body>
     <div id="search-container">
         <div class="search-bar">
+            <div id="filter-buttons">
+                <button id="vegan-btn" class="filter-btn round-btn" title="Vegan">🌱</button>
+                <button id="halal-btn" class="filter-btn round-btn" title="Halal">☪</button>
+            </div>
             <input type="text" id="search-input" placeholder="Search or ask AI...">
+            <button id="ai-btn" title="AI Search">✨</button>
             <div id="radius-widget">
                 <span id="radius-label">📍 5 km</span>
                 <input type="range" id="radius-slider" min="1" max="50" value="5">
             </div>
-            <div id="filter-buttons">
-                <button id="vegan-btn" class="filter-btn" title="Vegan">🌱</button>
-                <button id="halal-btn" class="filter-btn" title="Halal">☪</button>
-            </div>
-            <button id="ai-btn" title="AI Search">✨</button>
             <button id="add-btn" title="Add Restaurant">+</button>
         </div>
         <div id="search-suggestions" class="suggestions-list">
